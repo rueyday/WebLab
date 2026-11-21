@@ -275,6 +275,44 @@ export function defineTool(tool) {
 }
 export const getTool = (id) => byId.get(id);
 
+/* ── groups (what the sidebar shows; each bundles related tools as tabs) ── */
+export const groups = [];
+const groupById = new Map();
+/** defineGroups([{id, name, icon, desc, parts: [toolId, …]}]) — tools left out get a group of their own */
+export function defineGroups(defs) {
+  const taken = new Set();
+  const add = (g) => { groups.push(g); groupById.set(g.id, g); g.parts.forEach((p) => { p.group = g; taken.add(p.id); }); };
+  for (const d of defs) {
+    const parts = d.parts.map(getTool).filter(Boolean);
+    if (!parts.length) continue;
+    const g = { icon: parts[0].icon, desc: parts[0].desc, ...d, parts };
+    g.search = [g.name, g.desc, ...parts.map((p) => p.search)].join(" ").toLowerCase();
+    parts.forEach((p) => { p.tab = d.tabs?.[p.id] || p.name; });
+    add(g);
+  }
+  for (const t of tools) if (!taken.has(t.id)) { t.tab = t.name; add({ id: t.id, name: t.name, icon: t.icon, desc: t.desc, parts: [t], search: t.search }); }
+}
+export const getGroup = (id) => groupById.get(id);
+/** last tab the user had open in a group (falls back to its first tab) */
+export const rememberedPart = (g) => g.parts.find((p) => p.id === store.get("part:" + g.id)) || g.parts[0];
+/** the tab to open for a search query: first tab matching it, else the remembered one */
+export const partFor = (g, q = "") => (q && g.parts.find((p) => p.search.includes(q))) || rememberedPart(g);
+/**
+ * resolve any id to {group, part}:
+ *   "crypto/hash" → group crypto, tab hash      "hash" → the group that holds tool hash, tab hash
+ *   "crypto"      → group crypto, remembered tab   (a tool id wins over a group id of the same name)
+ */
+export function resolve(id, partId) {
+  if (!id) return null;
+  if (id.includes("/")) [id, partId] = id.split("/");
+  const g = groupById.get(id);
+  if (g && partId) return { group: g, part: g.parts.find((p) => p.id === partId) || rememberedPart(g) };
+  const t = byId.get(id);
+  if (t?.group) return { group: t.group, part: t };
+  if (g) return { group: g, part: rememberedPart(g) };
+  return null;
+}
+
 /* commands (palette-invokable actions beyond tools) */
 export const commands = [];
 export function defineCommand(cmd) { commands.push({ icon: "⌁", ...cmd }); }
@@ -306,57 +344,93 @@ export const on = (name, fn) => bus.addEventListener(name, fn);
 export const emit = (name, detail) => bus.dispatchEvent(new CustomEvent(name, { detail }));
 
 /* ── router ─────────────────────────────────────────────── */
-let currentTool = null;
-let teardown = null;
+let activeGroup = null;   // group object currently on screen
+let activePart = null;    // tool object currently mounted inside it
+let teardown = null;      // the mounted tool's cleanup
+let partBody = null, partStrip = null, partDesc = null;
 
-export function navigate(id, opts = {}) {
-  const tool = byId.get(id) || byId.get("home");
-  if (!tool) return;
-  const hash = "#/" + tool.id;
-  if (location.hash !== hash && !opts.fromHash) location.hash = hash;
-  if (currentTool === tool.id && !opts.force) return;
-  currentTool = tool.id;
-
+function unmountPart() {
   try { teardown?.(); } catch (err) { console.warn("teardown failed", err); }
   teardown = null;
+  activePart = null;
+}
+function mountPart(part) {
+  unmountPart();
+  activePart = part;
+  const g = activeGroup;
+  if (g.parts.length > 1) {
+    store.set("part:" + g.id, part.id);
+    $$(".part", partStrip).forEach((b) => b.classList.toggle("on", b.dataset.id === part.id));
+  }
+  if (partDesc) partDesc.textContent = part.desc || g.desc || "";
+  const hash = hashFor(g, part);
+  if (location.hash !== hash) history.replaceState(null, "", hash);
+  clear(partBody);
+  partBody.classList.remove("panel-anim"); void partBody.offsetWidth; partBody.classList.add("panel-anim");
+  try {
+    const result = part.mount(partBody);
+    if (typeof result === "function") teardown = result;
+  } catch (err) {
+    console.error(err);
+    partBody.append(out("This tool failed to start:\n" + (err?.stack || err), "err"));
+  }
+  document.title = g.id === "home" ? "TRINKET LAB" : `${part.name} // TRINKET LAB`;
+  emit("navigate", part.id);
+}
+const hashFor = (g, part) => "#/" + g.id + (g.parts.length > 1 ? "/" + part.id : "");
+
+/** navigate("image") · navigate("crypto", {part: "hash"}) · navigate("crypto/hash") */
+export function navigate(id, opts = {}) {
+  const r = resolve(id, opts.part) || resolve("home");
+  if (!r) return;
+  const { group, part } = r;
+  if (activeGroup?.id === group.id && !opts.force) {
+    if (activePart?.id !== part.id) mountPart(part);
+    return;
+  }
+  unmountPart();
+  activeGroup = group;
+  const hash = hashFor(group, part);
+  if (location.hash !== hash) { if (opts.fromHash) history.replaceState(null, "", hash); else location.hash = hash; }
 
   const view = $("#view");
   clear(view);
+  partDesc = h("p", { text: part.desc || group.desc || "" });
   const head = h("div.tool-head",
     h("div.tool-title",
-      h("span.t-icon", { text: tool.icon }),
-      h("div",
-        h("h2", { text: tool.name }),
-        tool.desc ? h("p", { text: tool.desc }) : null)),
+      h("span.t-icon", { text: group.icon }),
+      h("div", h("h2", { text: group.name }), partDesc)),
     h("div.card-actions",
-      h("button.icon-btn", {
-        title: "Pin to favorites",
-        text: isFav(tool.id) ? "★" : "☆",
-        class: isFav(tool.id) ? "on" : "",
+      group.id === "home" ? null : h("button.icon-btn", {
+        "data-tip": "Pin to the top of the sidebar",
+        text: isFav(group.id) ? "★" : "☆",
+        class: isFav(group.id) ? "on" : "",
         onclick(e) {
-          const nowFav = toggleFav(tool.id);
+          const nowFav = toggleFav(group.id);
           e.currentTarget.textContent = nowFav ? "★" : "☆";
           e.currentTarget.classList.toggle("on", nowFav);
           toast(nowFav ? "pinned" : "unpinned");
         },
       })));
-  const body = h("div.panel-anim");
-  view.append(head, body);
+  partStrip = group.parts.length > 1
+    ? h("nav.parts", { "aria-label": group.name + " tabs" },
+        group.parts.map((p) => h("button.part", {
+          type: "button", dataset: { id: p.id }, "data-tip": p.desc, "data-tip-side": "bottom",
+          onclick: () => navigate(group.id, { part: p.id }),
+        }, h("span.p-icon", { text: p.icon }), h("span", { text: p.tab }))))
+    : null;
+  partBody = h("div.panel-anim");
+  view.append(head);
+  if (partStrip) view.append(partStrip);
+  view.append(partBody);
   window.scrollTo({ top: 0, behavior: "instant" in document.body.style ? "instant" : "auto" });
 
-  try {
-    const result = tool.mount(body);
-    if (typeof result === "function") teardown = result;
-  } catch (err) {
-    console.error(err);
-    body.append(out("This tool failed to start:\n" + (err?.stack || err), "err"));
-  }
-
-  pushRecent(tool.id);
-  emit("navigate", tool.id);
-  document.title = tool.id === "home" ? "TRINKET LAB" : `${tool.name} // TRINKET LAB`;
+  mountPart(part);
+  pushRecent(group.id);
 }
-export const current = () => currentTool;
+/** id of the tool currently mounted (e.g. "hash"), and of the sidebar entry holding it (e.g. "crypto") */
+export const current = () => activePart?.id ?? null;
+export const currentGroup = () => activeGroup?.id ?? null;
 
 export function startRouter() {
   const fromHash = () => {
@@ -421,10 +495,14 @@ export function openPalette(prefill = "") {
   });
   let items = [], cursor = 0;
 
-  const entries = () => [
-    ...tools.filter((t) => t.id !== "home").map((t) => ({
-      icon: t.icon, label: t.name, sub: t.cat, search: t.search, run: () => navigate(t.id),
+  const entries = [
+    ...groups.filter((g) => g.id !== "home").map((g) => ({
+      icon: g.icon, label: g.name, sub: g.parts.length > 1 ? g.parts.length + " tabs" : "tool", search: g.search,
+      run: () => navigate(g.id, { part: rememberedPart(g).id }),
     })),
+    ...groups.filter((g) => g.parts.length > 1).flatMap((g) => g.parts.map((p) => ({
+      icon: p.icon, label: p.name, sub: "in " + g.name, search: p.search, run: () => navigate(g.id, { part: p.id }),
+    }))),
     ...commands.map((c) => ({
       icon: c.icon, label: c.label, sub: c.sub || "action",
       search: (c.label + " " + (c.keywords || "")).toLowerCase(), run: c.run,
@@ -433,7 +511,7 @@ export function openPalette(prefill = "") {
 
   function render() {
     const q = box.value.trim();
-    items = entries()
+    items = entries
       .map((e) => ({ e, score: fuzzy(q, e.search) }))
       .filter((x) => x.score > 0)
       .sort((a, b) => b.score - a.score)
@@ -492,6 +570,50 @@ export function startShortcuts() {
       if (s.match?.(e)) { e.preventDefault(); s.run(); return; }
     }
   });
+}
+
+/* ── tooltips: one floating box for every [data-tip] (rail items, tabs, header buttons) ── */
+export function startTooltips() {
+  const tip = h("div.tip", { role: "tooltip", hidden: true });
+  document.body.append(tip);
+  let target = null;
+  const hide = () => { target = null; tip.hidden = true; };
+  const place = (el) => {
+    const r = el.getBoundingClientRect(), w = tip.offsetWidth, hgt = tip.offsetHeight, pad = 8;
+    const vw = innerWidth, vh = innerHeight;
+    let left, top;
+    if ((el.dataset.tipSide || "right") === "right" && r.right + 10 + w <= vw) {
+      left = r.right + 10; top = r.top + r.height / 2 - hgt / 2;
+    } else {
+      left = r.left + r.width / 2 - w / 2;
+      top = r.bottom + 8;
+      if (top + hgt > vh - pad) top = r.top - hgt - 8;
+    }
+    tip.style.left = clamp(left, pad, vw - w - pad) + "px";
+    tip.style.top = clamp(top, pad, vh - hgt - pad) + "px";
+  };
+  const show = (el) => {
+    const text = el.dataset.tip;
+    if (!text) return hide();
+    target = el;
+    clear(tip);
+    tip.append(h("div.tip-main", { text }));
+    if (el.dataset.tipSub) tip.append(h("div.tip-sub", { text: el.dataset.tipSub }));
+    tip.hidden = false;
+    place(el);
+  };
+  const onEnter = (e) => {
+    const el = e.target.closest?.("[data-tip]");
+    if (el && el !== target) show(el);
+    else if (!el && target) hide();
+  };
+  document.addEventListener("mouseover", onEnter);
+  document.addEventListener("focusin", (e) => { if (e.target.matches?.(":focus-visible")) onEnter(e); });
+  document.addEventListener("mouseout", (e) => { if (target && !e.relatedTarget) hide(); });
+  document.addEventListener("focusout", hide);
+  ["mousedown", "keydown", "scroll", "wheel"].forEach((ev) => document.addEventListener(ev, hide, { passive: true, capture: true }));
+  window.addEventListener("resize", hide);
+  on("navigate", hide);
 }
 
 /* ── lazy external library loader (cached by the service worker) ── */

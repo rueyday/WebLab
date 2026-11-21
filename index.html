@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>TRINKET LAB // every web tool, one tab</title>
-<meta name="description" content="TRINKET LAB — 30+ browser-only tools: text, image, colour, JSON, regex, hashes, encoders, QR codes, converters, timers, notes and more. No uploads, no accounts, works offline." />
+<meta name="description" content="TRINKET LAB — 15 browser-only toolkits covering text, data, code, files, crypto, images, design, QR, media, numbers, time, network, device and notes. No uploads, no accounts, works offline." />
 <meta name="theme-color" content="#04060d" />
 <meta property="og:title" content="TRINKET LAB" />
 <meta property="og:description" content="Every small web tool you need, running entirely in your browser." />
@@ -37,8 +37,8 @@
 
 <header class="site-head">
   <div class="brand">
-    <button class="icon-btn" id="rail-toggle" title="Toggle sidebar (⌘B)" aria-label="Toggle sidebar">☰</button>
-    <button class="brand-mark" id="brand-home" title="Home" aria-label="Home">⬢</button>
+    <button class="icon-btn" id="rail-toggle" data-tip="Toggle sidebar (⌘B)" data-tip-side="bottom" aria-label="Toggle sidebar">☰</button>
+    <button class="brand-mark" id="brand-home" data-tip="Home" data-tip-side="bottom" aria-label="Home">⬢</button>
     <div class="brand-text">
       <h1>TRINKET<span>LAB</span></h1>
       <p class="tagline">every tool · zero uploads · runs in your tab</p>
@@ -48,11 +48,11 @@
     <button class="search-btn" id="open-palette" type="button">
       <span>⌕</span><span class="grow">search tools…</span><span class="kbd">⌘K</span>
     </button>
-    <span class="clock" id="clock" title="Local time">--:--:--</span>
-    <button class="icon-btn" id="btn-theme" title="Cycle theme (⌘⇧T)" aria-label="Theme">◐</button>
-    <button class="icon-btn" id="btn-fullscreen" title="Fullscreen (F11)" aria-label="Fullscreen">⛶</button>
-    <button class="icon-btn" id="btn-help" title="Keyboard shortcuts (?)" aria-label="Help">?</button>
-    <button class="icon-btn" id="btn-settings" title="Settings" aria-label="Settings">⚙</button>
+    <span class="clock" id="clock" data-tip="Local time · click for Time & Weather" data-tip-side="bottom">--:--:--</span>
+    <button class="icon-btn" id="btn-theme" data-tip="Cycle colour theme (⌘⇧T)" data-tip-side="bottom" aria-label="Theme">◐</button>
+    <button class="icon-btn" id="btn-fullscreen" data-tip="Fullscreen" data-tip-side="bottom" aria-label="Fullscreen">⛶</button>
+    <button class="icon-btn" id="btn-help" data-tip="Keyboard shortcuts (?)" data-tip-side="bottom" aria-label="Help">?</button>
+    <button class="icon-btn" id="btn-settings" data-tip="Settings · themes, density, backup" data-tip-side="bottom" aria-label="Settings">⚙</button>
   </div>
 </header>
 

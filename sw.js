@@ -1,5 +1,5 @@
 /* TRINKET LAB service worker — cache-first for the app shell so it works offline. */
-const VERSION = "trinket-v3.0.0";
+const VERSION = "trinket-v3.1.0";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./manifest.webmanifest", "./icon.svg", "./privacy.html",
   "./js/main.js", "./js/core.js",

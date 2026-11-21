@@ -10,17 +10,31 @@ and PDF / OCR libraries load lazily from a CDN the first time you use them.
 
 ## Tools
 
-| category | tools |
+The sidebar shows **15 tools**. Each bundles related jobs as tabs (38 in total), so
+there is one place to look for anything to do with text, one for data, and so on.
+Hover any sidebar entry, tab or header button for a one-line explanation.
+
+| tool | tabs |
 | --- | --- |
-| Text & writing | Text Metrics (counts, readability, frequency, platform limits) · Text Transform (case, lines, slugs, find/replace) · Regex Lab · Text Compare (diff) · Markdown Studio (HTML → MD, print) · Glyphs & Fancy Text (emoji, symbols, unicode styles, inspector) |
-| Data & code | JSON Studio (format, validate, query, tree, → CSV/YAML/TypeScript) · Table Lab (CSV/TSV/JSON/MD/HTML grid → any format) · Code Tools (beautify/minify, escapes, HTML → MD, SVG → PNG) · Code Sandbox (live HTML/CSS/JS + console) · PDF Workshop (merge, split, rotate, watermark, images ⇄ PDF, text) · Zip & Unzip (+ gzip) · URL Inspector |
-| Crypto & security | Hash & Checksum (MD5/SHA/CRC32/HMAC, files) · Encoder Ring (Base64/32, hex, binary, entities, unicode, ROT, Morse, JWT) · Passwords & IDs (generator, strength, UUID/ULID/nanoid, RSA/EC keypairs) · Encrypt/Decrypt (AES-256-GCM text & files) |
-| Design & media | Image Forge (crop, resize, rotate, filters, adjust, redact, text overlay, EXIF, OCR, ASCII, favicons, camera) · Color Lab · CSS Studio (shadows, radius, filters, easing, glass, fluid type, type scale, fonts) · QR Studio (+ EAN/UPC barcodes, scanner) · Media Tools (video → GIF/frames/audio, audio trim → WAV, screen/mic/camera recorder) · Sketchpad |
-| Numbers & units | Unit Converter (15 categories + live currency) · Number Base & Bits (+ number to words) · Calculator (expressions, graphing, matrices, number facts, money maths, statistics) |
-| Time | Time Machine (unix, world clock, date maths, countdown, timers & alarms, stopwatch, Pomodoro, sleep calculator, cron) · Weather (Open-Meteo forecast) |
-| Web & system | Net Console (HTTP client, WebSocket, DNS, my IP, speed test, is-it-up) · Network Kit (subnets, UA parser, chmod, MAC, HTTP codes, ports, MIME) · Device Scope · Hardware Test (display, camera, mic, speakers, sensors) · Input Tester |
-| Workspace | Notes & Tasks · Launchpad (bookmarks) · Cheat Sheets (git, bash, vim, docker, npm, markdown, python, JS, HTTP, OS keys) |
-| Misc | Audio Bench (tone, metronome, noise, tuner, TTS, dictation) · Randomizer (dice, wheel, picker, lorem, fake data) |
+| Text Studio | Text Metrics · Text Transform · Regex Lab · Text Compare · Markdown Studio · Glyphs & Fancy Text |
+| Data Studio | JSON Studio · Table Lab |
+| Code Tools | Code Tools (beautify/minify/escape) · Code Sandbox · Cheat Sheets |
+| File Workshop | PDF Workshop · Zip & Unzip |
+| Crypto Kit | Hash & Checksum · Encoder Ring · Encrypt / Decrypt · Passwords & IDs |
+| Image Forge | Image Forge · Sketchpad |
+| Design Kit | Color Lab · CSS Studio |
+| QR Studio | QR codes, barcodes, scanner |
+| Media Bench | Media Tools (video/GIF/record) · Audio Bench (tone, metronome, tuner, TTS) |
+| Numbers | Calculator · Unit Converter · Number Base & Bits |
+| Time & Weather | Time Machine · Weather |
+| Network | Net Console (HTTP, WebSocket, DNS, my IP, speed) · Network Kit (subnets, UA, ports, MIME) · URL Inspector |
+| Device Lab | Device Scope · Hardware Test · Input Tester |
+| Workspace | Notes & Tasks · Launchpad (bookmarks) |
+| Randomizer | dice, wheel, picker, lorem, fake data |
+
+URLs are `#/tool/tab` (e.g. `#/crypto/hash`). Old single-tool links such as `#/hash`
+or `#/regex` still resolve to the right tab. The command palette lists both the
+15 tools and every tab, so searching "base64" or "diff" jumps straight there.
 
 Global: command palette (`⌘K`), sidebar filter (`/`), pinned favourites (`Alt 1–9`),
 5 themes, settings, backup export/import, drag-and-drop / paste routing, offline PWA.
@@ -33,7 +47,7 @@ styles.css          design system + themes
 js/main.js          boot: settings, rail, shortcuts, palette commands, SW
 js/core.js          registry, router, storage, ui kit, palette, modal
 js/lib/*.js         pure logic (qrcode, barcode, markdown, diff, expr, units, colorkit, hashes, textkit, zip, gif, exif)
-js/tools/*.js       one module per tool, self-registers via defineTool()
+js/tools/*.js       one module per tool, self-registers via defineTool(); index.js groups them
 sw.js               service worker (offline cache)
 manifest.webmanifest, icon.svg, privacy.html
 ```
@@ -45,13 +59,16 @@ Create `js/tools/mytool.js`:
 ```js
 import { defineTool, h, card } from "../core.js";
 defineTool({
-  id: "mytool", name: "My Tool", icon: "✦", cat: "misc",
-  desc: "What it does.", tags: ["search", "words"],
+  id: "mytool", name: "My Tool", icon: "✦",
+  desc: "What it does (shown on hover and under the title).", tags: ["search", "words"],
   mount(root) { root.append(card("Hello", h("p", "world"))); return () => {/* cleanup */}; },
 });
 ```
 
-then add `import "./mytool.js";` to `js/tools/index.js` and the path to `SHELL` in `sw.js`.
+then in `js/tools/index.js` add `import "./mytool.js";` and either list `"mytool"` in
+the `parts` of an existing group (it becomes a tab there) or add a new group entry.
+A tool left out of every group shows up in the sidebar on its own. Finally add the
+file path to `SHELL` in `sw.js`.
 
 ## Deploying
 

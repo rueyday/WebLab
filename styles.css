@@ -652,3 +652,42 @@ mark.hit.alt { background: color-mix(in srgb, var(--a2) 40%, transparent); }
 }
 html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="off"] *::after { animation: none !important; transition: none !important; }
 
+
+/* ── tabs inside a tool (one per bundled job) ──────────── */
+.parts {
+  display: flex; flex-wrap: wrap; gap: 2px; margin: -4px 0 18px;
+  border-bottom: 1px solid var(--line);
+}
+.part {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 14px 10px; margin-bottom: -1px;
+  border: 0; border-bottom: 2px solid transparent; background: transparent;
+  color: var(--muted); font-family: var(--sans); font-size: 13px; font-weight: 500; cursor: pointer;
+  transition: color .16s, border-color .16s;
+}
+.part .p-icon { font-family: var(--mono); font-size: 11px; opacity: .75; }
+.part:hover { color: var(--text); }
+.part.on { color: var(--text-hi); border-bottom-color: var(--a1); }
+[data-glow="on"] .part.on { text-shadow: 0 0 12px color-mix(in srgb, var(--a1) 55%, transparent); }
+
+/* ── floating tooltip (filled from data-tip / data-tip-sub) ── */
+.tip {
+  position: fixed; z-index: 90; max-width: 280px; padding: 9px 12px;
+  border: 1px solid var(--line-2); border-radius: var(--r-sm);
+  background: var(--panel-solid); color: var(--text); box-shadow: var(--shadow);
+  font-family: var(--sans); font-size: 12.5px; line-height: 1.5; pointer-events: none;
+  animation: tip-in .12s ease both;
+}
+.tip[hidden] { display: none; }
+.tip-sub { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 10.5px; letter-spacing: .04em; color: var(--muted); }
+@keyframes tip-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+[data-motion="off"] .tip { animation: none; }
+
+/* ── home card: tab chips ───────────────────────────────── */
+.home-card .hc-parts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.home-card .hc-part {
+  padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .04em; color: var(--muted);
+  transition: color .14s, border-color .14s, background .14s;
+}
+.home-card .hc-part:hover { color: var(--text-hi); border-color: var(--line-hot); background: color-mix(in srgb, var(--a1) 12%, transparent); }

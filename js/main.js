@@ -1,12 +1,17 @@
 /* TRINKET LAB — boot */
 import {
-  $, $$, h, clear, toast, store, tools, getTool, navigate, startRouter, startShortcuts,
-  defineShortcut, defineCommand, openPalette, modal, on, favorites, isFav, toggleFav,
-  copy, download, pickFile, readAs, btn, seg, field, select, kv, current,
+  $, $$, h, clear, toast, store, tools, groups, getGroup, resolve, rememberedPart, partFor, navigate, startRouter, startShortcuts,
+  startTooltips, defineShortcut, defineCommand, openPalette, modal, on, favorites, recents, isFav, toggleFav,
+  copy, download, pickFile, readAs, btn, seg, field, current, currentGroup,
 } from "./core.js";
 import { registerAll } from "./tools/index.js";
 
 registerAll();
+
+/* pins and recents are stored by sidebar entry; old backups may hold ids of tools that are now tabs */
+const toGroupIds = (ids) => [...new Set(ids.map((id) => resolve(id)?.group.id).filter((id) => id && id !== "home"))];
+store.set("favorites", toGroupIds(favorites()));
+store.set("recents", toGroupIds(recents()));
 
 /* ── settings ───────────────────────────────────────────── */
 const THEMES = ["midnight", "aurora", "ember", "matrix", "paper"];
@@ -28,45 +33,39 @@ function cycleTheme() { setTheme(THEMES[(THEMES.indexOf(settings.theme) + 1) % T
 applySettings();
 
 /* ── sidebar rail ───────────────────────────────────────── */
-const CAT_ORDER = ["favorites", "recent", "text", "data", "crypto", "media", "numbers", "time", "web", "workspace", "misc"];
-const CAT_LABEL = {
-  favorites: "★ pinned", recent: "recent", text: "text & writing", data: "data & code", crypto: "crypto & security",
-  media: "design & media", numbers: "numbers & units", time: "time", web: "web & system", workspace: "workspace", misc: "misc",
+const openGroup = (g, q = "") => {
+  navigate(g.id, { part: partFor(g, q).id });
+  if (window.innerWidth < 860) { settings.railCollapsed = true; applySettings(); }
 };
 function renderRail(filter = "") {
   const list = $("#rail-list");
   clear(list);
   const q = filter.trim().toLowerCase();
-  const visible = tools.filter((t) => t.id !== "home" && (!q || t.search.includes(q)));
-  const groups = new Map();
-  if (!q) {
-    const favs = favorites().map(getTool).filter(Boolean);
-    if (favs.length) groups.set("favorites", favs);
-  }
-  for (const t of visible) {
-    if (!groups.has(t.cat)) groups.set(t.cat, []);
-    groups.get(t.cat).push(t);
-  }
-  const item = (t) =>
+  const all = groups.filter((g) => g.id !== "home");
+  const visible = all.filter((g) => !q || g.search.includes(q));
+  const favs = q ? [] : favorites().map(getGroup).filter(Boolean);
+  const item = (g) =>
     h("button.rail-item", {
-      type: "button", class: current() === t.id ? "is-active" : "", dataset: { id: t.id },
-      onclick: () => { navigate(t.id); if (window.innerWidth < 860) { settings.railCollapsed = true; applySettings(); } },
+      type: "button", class: currentGroup() === g.id ? "is-active" : "", dataset: { id: g.id },
+      "data-tip": g.desc, "data-tip-sub": g.parts.length > 1 ? "tabs: " + g.parts.map((p) => p.tab).join(" · ") : null,
+      onclick: () => openGroup(g, q),
     },
-      h("span.ri-icon", { text: t.icon }),
-      h("span.ri-name", { text: t.name }),
+      h("span.ri-icon", { text: g.icon }),
+      h("span.ri-name", { text: g.name }),
       h("span.ri-star", {
-        text: isFav(t.id) ? "★" : "☆", class: isFav(t.id) ? "on" : "", title: "pin",
-        onclick(e) { e.stopPropagation(); toggleFav(t.id); },
+        text: isFav(g.id) ? "★" : "☆", class: isFav(g.id) ? "on" : "", "data-tip": isFav(g.id) ? "unpin" : "pin to top", "data-tip-side": "bottom",
+        onclick(e) { e.stopPropagation(); toggleFav(g.id); },
       }));
-  const home = h("button.rail-item", {
-    type: "button", class: current() === "home" ? "is-active" : "", onclick: () => navigate("home"),
-  }, h("span.ri-icon", { text: "⌂" }), h("span.ri-name", { text: "Home" }));
-  list.append(home);
-  for (const cat of CAT_ORDER) {
-    if (!groups.has(cat)) continue;
-    list.append(h("div.rail-group", { text: CAT_LABEL[cat] || cat }));
-    for (const t of groups.get(cat)) list.append(item(t));
+  list.append(h("button.rail-item", {
+    type: "button", class: currentGroup() === "home" ? "is-active" : "", dataset: { id: "home" },
+    "data-tip": "Overview of every tool", onclick: () => navigate("home"),
+  }, h("span.ri-icon", { text: "⌂" }), h("span.ri-name", { text: "Home" })));
+  if (favs.length) {
+    list.append(h("div.rail-group", { text: "★ pinned" }));
+    for (const g of favs) list.append(item(g));
   }
+  list.append(h("div.rail-group", { text: q ? "matches" : "all tools" }));
+  for (const g of visible) list.append(item(g));
   if (!visible.length) list.append(h("div.palette-empty", { text: "no tools match" }));
   const foot = $("#rail-foot");
   clear(foot);
@@ -77,11 +76,11 @@ function renderRail(filter = "") {
 }
 $("#rail-filter").addEventListener("input", (e) => renderRail(e.target.value));
 $("#rail-filter").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") { const first = $(".rail-item[data-id]", $("#rail-list")); first?.click(); }
+  if (e.key === "Enter") { const first = $('.rail-item[data-id]:not([data-id="home"])', $("#rail-list")); first?.click(); }
   if (e.key === "Escape") { e.target.value = ""; renderRail(); }
 });
 on("navigate", () => {
-  $$(".rail-item").forEach((n) => n.classList.toggle("is-active", n.dataset.id === current() || (!n.dataset.id && current() === "home")));
+  $$(".rail-item").forEach((n) => n.classList.toggle("is-active", n.dataset.id === currentGroup()));
 });
 on("favorites", () => renderRail($("#rail-filter").value));
 $("#rail-toggle").addEventListener("click", () => { settings.railCollapsed = !settings.railCollapsed; applySettings(); });
@@ -146,7 +145,7 @@ function showSettings() {
         store.wipe();
         location.reload();
       }, "ghost danger")),
-    h("p.hint", { text: `storage used: ${storageUsed()} · ${tools.length - 1} tools loaded` }));
+    h("p.hint", { text: `storage used: ${storageUsed()} · ${groups.length - 1} tools · ${tools.length - 1} tabs loaded` }));
   modal("Settings", body);
 }
 function storageUsed() {
@@ -176,9 +175,9 @@ document.addEventListener("keydown", (e) => {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
   if (typing) return;
   if (e.altKey && /^[1-9]$/.test(e.key)) {
-    const list = favorites().length ? favorites() : tools.filter((t) => t.id !== "home").map((t) => t.id);
-    const id = list[+e.key - 1];
-    if (id) { e.preventDefault(); navigate(id); }
+    const list = favorites().length ? favorites() : groups.filter((g) => g.id !== "home").map((g) => g.id);
+    const g = getGroup(list[+e.key - 1]);
+    if (g) { e.preventDefault(); openGroup(g); }
     return;
   }
   if (e.key === "g" && !e.metaKey && !e.ctrlKey) {
@@ -207,7 +206,7 @@ function showHelp() {
   modal("Keyboard shortcuts",
     h("div",
       rows.map(([k, d]) => h("div.shortcut-row", h("span", { text: d }), h("span.kbd", { text: k }))),
-      h("p.hint", { style: { marginTop: "14px" }, text: "Tip: every tool remembers its inputs in this browser. Nothing is ever uploaded." })));
+      h("p.hint", { style: { marginTop: "14px" }, text: "Tip: hover any sidebar entry or tab for what it does. Every tool remembers its inputs in this browser. Nothing is ever uploaded." })));
 }
 
 /* ── palette commands ───────────────────────────────────── */
@@ -220,7 +219,11 @@ defineCommand({ label: "Keyboard shortcuts", keywords: "help keys", icon: "?", r
 defineCommand({ label: "Export all data (backup)", keywords: "backup download save", icon: "↓", run: exportData });
 defineCommand({ label: "Import backup", keywords: "restore upload", icon: "↑", run: importData });
 defineCommand({ label: "Copy current tool link", keywords: "share url", icon: "⧉", run: () => copy(location.href, "link copied") });
-defineCommand({ label: "Pin / unpin current tool", keywords: "favorite star", icon: "★", run: () => { toggleFav(current()); toast(isFav(current()) ? "pinned" : "unpinned"); } });
+defineCommand({ label: "Pin / unpin current tool", keywords: "favorite star", icon: "★", run: () => {
+  const g = currentGroup();
+  if (!g || g === "home") return toast("open a tool first");
+  toggleFav(g); toast(isFav(g) ? "pinned" : "unpinned");
+} });
 defineCommand({ label: "Reload app", keywords: "refresh", icon: "↻", run: () => location.reload() });
 
 /* ── global image capture → Image Forge ─────────────────── */
@@ -281,5 +284,6 @@ window.addEventListener("beforeinstallprompt", (e) => {
 
 /* ── go ─────────────────────────────────────────────────── */
 startShortcuts();
+startTooltips();
 startRouter();
 renderRail();
